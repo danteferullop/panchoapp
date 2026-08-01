@@ -1,0 +1,41 @@
+/// Configuración de la app.
+///
+/// Nada de esto es secreto crítico (el Access Token de Mercado Pago y la
+/// API Key de Google Maps para Distance Matrix viven SOLO en el backend,
+/// como variables de entorno de Cloud Functions — ver /backend/functions).
+///
+/// Lo que hay acá son valores que, por diseño, sí viajan en el cliente:
+/// - La URL base de tus Cloud Functions (no es secreta).
+/// - Una API Key de Google Maps "de cliente", restringida en Google Cloud
+///   Console por nombre de paquete Android / bundle id de iOS, usada
+///   únicamente para pintar el mapa y (opcional) convertir la dirección
+///   escrita en un pin aproximado (Geocoding). Nunca se usa para calcular
+///   el costo real del envío: eso lo hace el backend con Distance Matrix.
+///
+/// Para no commitear valores reales, todo se lee vía --dart-define, por ej.:
+///
+/// flutter run \
+///   --dart-define=CLOUD_FUNCTIONS_BASE_URL=https://us-central1-tu-proyecto.cloudfunctions.net \
+///   --dart-define=GOOGLE_MAPS_CLIENT_API_KEY=AIzaSy...
+class AppConfig {
+  AppConfig._();
+
+  static const String cloudFunctionsBaseUrl = String.fromEnvironment(
+    'CLOUD_FUNCTIONS_BASE_URL',
+    defaultValue: 'https://REGION-TU_PROYECTO.cloudfunctions.net',
+  );
+
+  static const String googleMapsClientApiKey = String.fromEnvironment(
+    'GOOGLE_MAPS_CLIENT_API_KEY',
+    defaultValue: '',
+  );
+
+  /// Dirección fija del local, solo para mostrarla como referencia en la UI
+  /// (el valor que realmente importa para el cálculo vive en el backend).
+  static const String storeOriginLabel = 'Centro de Rosario, Santa Fe';
+
+  static bool get isMapsKeyConfigured => googleMapsClientApiKey.isNotEmpty;
+
+  static bool get isBackendConfigured =>
+      !cloudFunctionsBaseUrl.contains('REGION-TU_PROYECTO');
+}
