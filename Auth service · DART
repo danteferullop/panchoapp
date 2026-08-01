@@ -1,0 +1,28 @@
+import 'package:firebase_auth/firebase_auth.dart';
+
+/// La app no pide login (no está en el alcance del proyecto), pero para que
+/// las reglas de seguridad de Firestore puedan filtrar "solo mis órdenes"
+/// necesitamos un identificador estable por dispositivo. Usamos Firebase
+/// Anonymous Auth: se crea un usuario anónimo la primera vez que se abre
+/// la app y se reutiliza en las siguientes sesiones.
+class AuthService {
+  AuthService._internal();
+  static final AuthService instance = AuthService._internal();
+
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  Future<User> ensureSignedIn() async {
+    final current = _auth.currentUser;
+    if (current != null) return current;
+    final credential = await _auth.signInAnonymously();
+    return credential.user!;
+  }
+
+  String? get currentUserId => _auth.currentUser?.uid;
+
+  /// Token de identidad para autenticar las llamadas HTTP a las Cloud
+  /// Functions (el backend lo verifica con el Admin SDK antes de escribir
+  /// nada en Firestore).
+  Future<String?> getIdToken() => _auth.currentUser?.getIdToken() ??
+      Future.value(null);
+}
