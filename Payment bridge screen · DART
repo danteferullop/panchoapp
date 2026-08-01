@@ -1,0 +1,161 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../providers/cart_provider.dart';
+import '../services/functions_service.dart';
+import '../theme/app_theme.dart';
+import '../utils/formatters.dart';
+import '../widgets/glass_card.dart';
+import '../widgets/gradient_button.dart';
+import '../widgets/shimmer_box.dart';
+import 'order_confirmation_screen.dart';
+
+class PaymentBridgeScreen extends StatefulWidget {
+  final String deliveryAddress;
+  final ShippingQuote quote;
+
+  const PaymentBridgeScreen({super.key, required this.deliveryAddress, required this.quote});
+
+  @override
+  State<PaymentBridgeScreen> createState() => _PaymentBridgeScreenState();
+}
+
+class _PaymentBridgeScreenState extends State<PaymentBridgeScreen> {
+  bool _generating = false;
+  String? _error;
+
+  Future<void> _generatePaymentLink() async {
+    final cart = context.read<CartProvider>();
+    setState(() {
+      _generating = true;
+      _error = null;
+    });
+
+    try {
+      final result = await FunctionsService.instance.createPayment(
+        items: cart.items,
+        deliveryAddress: widget.deliveryAddress,
+        distanceKm: widget.quote.distanceKm,
+        shippingCost: widget.quote.shippingCost,
+        totalAmount: widget.quote.totalAmount,
+      );
+
+      final uri = Uri.parse(result.paymentLink);
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+
+      if (!mounted) return;
+
+      if (!opened) {
+        setState(() {
+          _error = 'No se pudo abrir el link de pago de Mercado Pago.';
+          _generating = false;
+        });
+        return;
+      }
+
+      // No vaciamos el carrito hasta ver el estado final del pago; la orden
+      // ya quedó creada en Firestore con paymentStatus: "pending" y la
+      // pantalla de confirmación escucha ese documento en tiempo real.
+      cart.clear();
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => OrderConfirmationScreen(orderId: result.orderId)),
+      );
+    } on FunctionsServiceException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.message;
+        _generating = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final quote = widget.quote;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('PAGO')),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('ORDER SUMMARY', style: Theme.of(context).textTheme.headlineMedium),
+            const SizedBox(height: 14),
+            GlassCard(
+              borderRadius: 26,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _row(context, 'Dirección', widget.deliveryAddress),
+                  _row(context, 'Distancia', '${quote.distanceKm.toStringAsFixed(1)} km'),
+                  _row(context, 'Subtotal', formatCurrency(quote.productTotal)),
+                  _row(context, 'Envío', formatCurrency(quote.shippingCost)),
+                  const Divider(color: AppColors.glassBorder, height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('TOTAL', style: Theme.of(context).textTheme.headlineMedium),
+                      Text(
+                        formatCurrency(quote.totalAmount),
+                        style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 22),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Spacer(),
+            if (_error != null) ...[
+              GlassCard(
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline_rounded, color: Color(0xFFE85F5F)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(_error!, style: Theme.of(context).textTheme.bodyMedium),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (_generating)
+              const GlassCard(child: LoadingStatusRow(message: 'Generando link de pago…'))
+            else
+              GradientButton(
+                label: 'Pagar con Mercado Pago',
+                icon: Icons.lock_outline_rounded,
+                onPressed: _generatePaymentLink,
+              ),
+            const SizedBox(height: 10),
+            Center(
+              child: Text(
+                'Pago seguro y encriptado · procesado por Mercado Pago',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _row(BuildContext context, String label, String value) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: Theme.of(context).textTheme.bodyMedium),
+            Flexible(
+              child: Text(
+                value,
+                textAlign: TextAlign.end,
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+            ),
+          ],
+        ),
+      );
+}
