@@ -1,0 +1,138 @@
+import 'package:flutter/material.dart';
+import '../models/order.dart';
+import '../services/firestore_service.dart';
+import '../theme/app_theme.dart';
+import '../utils/formatters.dart';
+import '../widgets/glass_card.dart';
+import '../widgets/gradient_button.dart';
+import 'root_shell.dart';
+
+/// Pantalla de éxito / estado del pedido (sección 3.8).
+///
+/// Técnicamente, para cuando el usuario llega acá la orden ya fue creada en
+/// Firestore con paymentStatus: "pending". Esta pantalla escucha ese mismo
+/// documento en tiempo real: apenas el webhook de Mercado Pago confirma el
+/// pago (ver /backend/functions/src/webhookMercadoPago.ts) y el backend
+/// actualiza paymentStatus a "approved", la UI se actualiza sola, sin que
+/// el usuario tenga que refrescar nada.
+class OrderConfirmationScreen extends StatelessWidget {
+  final String orderId;
+  const OrderConfirmationScreen({super.key, required this.orderId});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: StreamBuilder<Order>(
+            stream: FirestoreService.instance.streamOrder(orderId),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const Center(
+                  child: CircularProgressIndicator(color: AppColors.accentGlossy),
+                );
+              }
+              final order = snapshot.data!;
+              return _StatusBody(order: order);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusBody extends StatelessWidget {
+  final Order order;
+  const _StatusBody({required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _statusIcon(order.paymentStatus),
+        const SizedBox(height: 24),
+        Text(
+          _title(order.paymentStatus),
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 24),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          _subtitle(order.paymentStatus),
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyLarge,
+        ),
+        const SizedBox(height: 28),
+        GlassCard(
+          borderRadius: 24,
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Pedido', style: Theme.of(context).textTheme.bodyMedium),
+                  Text('#${order.id.substring(0, order.id.length.clamp(0, 8))}',
+                      style: Theme.of(context).textTheme.titleMedium),
+                ],
+              ),
+              const Divider(color: AppColors.glassBorder, height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Total', style: Theme.of(context).textTheme.bodyMedium),
+                  Text(formatCurrency(order.totalAmount), style: Theme.of(context).textTheme.titleMedium),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 32),
+        GradientButton(
+          label: 'Volver al inicio',
+          onPressed: () => Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const RootShell()),
+            (route) => false,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _statusIcon(PaymentStatus status) {
+    final (icon, color) = switch (status) {
+      PaymentStatus.approved => (Icons.check_rounded, const Color(0xFF3FE8A0)),
+      PaymentStatus.rejected => (Icons.close_rounded, const Color(0xFFE85F5F)),
+      _ => (Icons.hourglass_top_rounded, AppColors.accentGlossy),
+    };
+
+    return Container(
+      width: 96,
+      height: 96,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color.withOpacity(0.12),
+        boxShadow: [BoxShadow(color: color.withOpacity(0.45), blurRadius: 30, spreadRadius: 2)],
+        border: Border.all(color: color, width: 2),
+      ),
+      child: Icon(icon, size: 44, color: color),
+    );
+  }
+
+  String _title(PaymentStatus status) => switch (status) {
+        PaymentStatus.approved => '¡Pedido confirmado!',
+        PaymentStatus.rejected => 'El pago no se pudo procesar',
+        _ => 'Esperando confirmación del pago…',
+      };
+
+  String _subtitle(PaymentStatus status) => switch (status) {
+        PaymentStatus.approved =>
+          'Tu pedido fue registrado y ya está en preparación. Vas a poder ver su estado en tu perfil.',
+        PaymentStatus.rejected =>
+          'Mercado Pago rechazó el pago. Podés volver al carrito e intentar de nuevo.',
+        _ =>
+          'Estamos esperando que Mercado Pago confirme tu pago. Esta pantalla se actualiza sola apenas se confirme.',
+      };
+}
