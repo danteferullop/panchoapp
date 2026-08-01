@@ -1,0 +1,58 @@
+import * as admin from 'firebase-admin';
+import { CartItemRequest, OrderItemSummary } from './types';
+
+export class PricingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PricingError';
+  }
+}
+
+/**
+ * Busca cada producto en Firestore para obtener su precio REAL (nunca se
+ * confía en un precio que venga del cliente) y arma el detalle de la orden.
+ */
+export async function resolveCartItems(
+  items: CartItemRequest[],
+): Promise<{ resolvedItems: OrderItemSummary[]; productTotal: number }> {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new PricingError('El carrito está vacío.');
+  }
+
+  const db = admin.firestore();
+  const resolvedItems: OrderItemSummary[] = [];
+  let productTotal = 0;
+
+  for (const item of items) {
+    if (!item.productId || !item.quantity || item.quantity <= 0) {
+      throw new PricingError('Cada item necesita productId y quantity > 0.');
+    }
+
+    const snap = await db.collection('products').doc(item.productId).get();
+    if (!snap.exists) {
+      throw new PricingError(`El producto ${item.productId} no existe.`);
+    }
+
+    const data = snap.data()!;
+    const price = Number(data.price) || 0;
+    const stock = Number(data.stock ?? 0);
+
+    if (stock < item.quantity) {
+      throw new PricingError(`Stock insuficiente para "${data.name}".`);
+    }
+
+    const subtotal = price * item.quantity;
+    productTotal += subtotal;
+
+    resolvedItems.push({
+      productId: item.productId,
+      name: data.name,
+      price,
+      quantity: item.quantity,
+      size: item.size || '',
+      color: item.color || '',
+    });
+  }
+
+  return { resolvedItems, productTotal };
+}
