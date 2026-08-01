@@ -1,0 +1,56 @@
+uct · DART
+import 'package:cloud_firestore/cloud_firestore.dart';
+ 
+/// Representa un documento de la colección `products` en Firestore.
+class Product {
+  final String id;
+  final String name;
+  final double price;
+  final List<String> sizes;
+  final List<String> colors;
+  final List<String> images;
+  final int stock;
+  final String category;
+  final String description;
+ 
+  const Product({
+    required this.id,
+    required this.name,
+    required this.price,
+    required this.sizes,
+    required this.colors,
+    required this.images,
+    required this.stock,
+    this.category = '',
+    this.description = '',
+  });
+ 
+  String get thumbnail => images.isNotEmpty ? images.first : '';
+ 
+  factory Product.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? {};
+    return Product(
+      id: doc.id,
+      name: (data['name'] ?? '') as String,
+      price: (data['price'] as num?)?.toDouble() ?? 0,
+      sizes: List<String>.from(data['sizes'] ?? const []),
+      colors: List<String>.from(data['colors'] ?? const []),
+      images: List<String>.from(data['images'] ?? const []),
+      stock: (data['stock'] as num?)?.toInt() ?? 0,
+      category: (data['category'] ?? '') as String,
+      description: (data['description'] ?? '') as String,
+    );
+  }
+ 
+  Map<String, dynamic> toMap() => {
+        'name': name,
+        'price': price,
+        'sizes': sizes,
+        'colors': colors,
+        'images': images,
+        'stock': stock,
+        'category': category,
+        'description': description,
+      };
+}
+ 
