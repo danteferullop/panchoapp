@@ -1,0 +1,135 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../config/app_config.dart';
+import '../models/cart_item.dart';
+import 'auth_service.dart';
+
+class FunctionsServiceException implements Exception {
+  final String message;
+  FunctionsServiceException(this.message);
+  @override
+  String toString() => message;
+}
+
+class ShippingQuote {
+  final double distanceKm;
+  final double shippingCost;
+  final double productTotal;
+  final double totalAmount;
+
+  ShippingQuote({
+    required this.distanceKm,
+    required this.shippingCost,
+    required this.productTotal,
+    required this.totalAmount,
+  });
+
+  factory ShippingQuote.fromJson(Map<String, dynamic> json) => ShippingQuote(
+        distanceKm: (json['distanceKm'] as num).toDouble(),
+        shippingCost: (json['shippingCost'] as num).toDouble(),
+        productTotal: (json['productTotal'] as num).toDouble(),
+        totalAmount: (json['totalAmount'] as num).toDouble(),
+      );
+}
+
+class PaymentLink {
+  final String orderId;
+  final String paymentLink;
+
+  PaymentLink({required this.orderId, required this.paymentLink});
+
+  factory PaymentLink.fromJson(Map<String, dynamic> json) => PaymentLink(
+        orderId: json['orderId'] as String,
+        paymentLink: json['paymentLink'] as String,
+      );
+}
+
+/// Llama a las Cloud Functions descriptas en el documento de backend:
+/// POST /calculateShipping y POST /createPayment.
+///
+/// El cliente NUNCA llama directamente a Google Maps ni a Mercado Pago:
+/// ambas integraciones viven en el backend, que es quien guarda las
+/// credenciales sensibles (Access Token de Mercado Pago, API Key de
+/// Distance Matrix) como variables de entorno.
+class FunctionsService {
+  FunctionsService._internal();
+  static final FunctionsService instance = FunctionsService._internal();
+
+  Uri _endpoint(String name) => Uri.parse('${AppConfig.cloudFunctionsBaseUrl}/$name');
+
+  Future<Map<String, String>> _headers() async {
+    final token = await AuthService.instance.getIdToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+  }
+
+  Future<ShippingQuote> calculateShipping({
+    required List<CartItem> items,
+    required String deliveryAddress,
+  }) async {
+    final body = jsonEncode({
+      'items': items.map((e) => e.toRequestJson()).toList(),
+      'deliveryAddress': deliveryAddress,
+    });
+
+    http.Response response;
+    try {
+      response = await http
+          .post(_endpoint('calculateShipping'), headers: await _headers(), body: body)
+          .timeout(const Duration(seconds: 20));
+    } catch (_) {
+      throw FunctionsServiceException(
+        'No pudimos conectar con el backend. Verificá tu conexión y que '
+        'CLOUD_FUNCTIONS_BASE_URL apunte a tus Cloud Functions ya desplegadas.',
+      );
+    }
+
+    if (response.statusCode != 200) {
+      throw FunctionsServiceException(_extractError(response));
+    }
+    return ShippingQuote.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<PaymentLink> createPayment({
+    required List<CartItem> items,
+    required String deliveryAddress,
+    required double distanceKm,
+    required double shippingCost,
+    required double totalAmount,
+  }) async {
+    final body = jsonEncode({
+      'items': items.map((e) => e.toRequestJson()).toList(),
+      'deliveryAddress': deliveryAddress,
+      'distanceKm': distanceKm,
+      'shippingCost': shippingCost,
+      'totalAmount': totalAmount,
+    });
+
+    http.Response response;
+    try {
+      response = await http
+          .post(_endpoint('createPayment'), headers: await _headers(), body: body)
+          .timeout(const Duration(seconds: 20));
+    } catch (_) {
+      throw FunctionsServiceException(
+        'No pudimos conectar con el backend para generar el link de pago.',
+      );
+    }
+
+    if (response.statusCode != 200) {
+      throw FunctionsServiceException(_extractError(response));
+    }
+    return PaymentLink.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  String _extractError(http.Response response) {
+    try {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      return json['error']?.toString() ?? 'Ocurrió un error (${response.statusCode}).';
+    } catch (_) {
+      return 'Ocurrió un error (${response.statusCode}).';
+    }
+  }
+}
