@@ -1,0 +1,42 @@
+/**
+ * Todas las credenciales sensibles viven acá, leídas de variables de
+ * entorno (.env, cargado automáticamente por Firebase Functions 2nd gen).
+ * Nunca se hardcodean ni se exponen al cliente.
+ */
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(
+      `Falta la variable de entorno "${name}". Revisá backend/functions/.env ` +
+        '(copiá .env.example y completá los valores).',
+    );
+  }
+  return value;
+}
+
+export const config = {
+  get googleMapsApiKey(): string {
+    return requireEnv('GOOGLE_MAPS_API_KEY');
+  },
+  get storeOriginAddress(): string {
+    return process.env.STORE_ORIGIN_ADDRESS || 'Centro de Rosario, Santa Fe, Argentina';
+  },
+  get shippingRatePerKm(): number {
+    return Number(process.env.SHIPPING_RATE_PER_KM || '100');
+  },
+  get mercadoPagoAccessToken(): string {
+    return requireEnv('MP_ACCESS_TOKEN');
+  },
+  get mpSuccessUrl(): string {
+    return process.env.MP_SUCCESS_URL || 'https://example.com/payment-success';
+  },
+  get mpFailureUrl(): string {
+    return process.env.MP_FAILURE_URL || 'https://example.com/payment-failure';
+  },
+  get mpPendingUrl(): string {
+    return process.env.MP_PENDING_URL || 'https://example.com/payment-pending';
+  },
+  get publicFunctionsBaseUrl(): string {
+    return requireEnv('PUBLIC_FUNCTIONS_BASE_URL');
+  },
+};
