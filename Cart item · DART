@@ -1,0 +1,29 @@
+import 'product.dart';
+ 
+/// Item dentro del carrito local (en memoria, vía CartProvider).
+class CartItem {
+  final Product product;
+  final String selectedSize;
+  final String selectedColor;
+  int quantity;
+ 
+  CartItem({
+    required this.product,
+    required this.selectedSize,
+    required this.selectedColor,
+    this.quantity = 1,
+  });
+ 
+  double get subtotal => product.price * quantity;
+ 
+  /// Clave única para identificar la misma variante (producto+talle+color)
+  /// dentro del carrito y poder acumular cantidades en vez de duplicar filas.
+  String get variantKey => '${product.id}_${selectedSize}_$selectedColor';
+ 
+  Map<String, dynamic> toRequestJson() => {
+        'productId': product.id,
+        'quantity': quantity,
+        'size': selectedSize,
+        'color': selectedColor,
+      };
+}
