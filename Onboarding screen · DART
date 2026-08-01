@@ -1,0 +1,95 @@
+import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
+import '../widgets/gradient_button.dart';
+import 'root_shell.dart';
+
+class OnboardingScreen extends StatelessWidget {
+  const OnboardingScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        children: [
+          // Fondo con vetas de luz cian cruzando la pantalla (sección 3.1).
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(0.6, -0.7),
+                  radius: 1.4,
+                  colors: [
+                    AppColors.gradientEnd.withOpacity(0.18),
+                    AppColors.bgPrimary,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          ...List.generate(3, (i) {
+            return Positioned(
+              top: 80.0 + i * 140,
+              left: -60,
+              child: Transform.rotate(
+                angle: -0.5,
+                child: Container(
+                  width: 420,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.accentGlossy.withOpacity(0),
+                        AppColors.accentGlossy.withOpacity(0.18 - i * 0.03),
+                        AppColors.accentGlossy.withOpacity(0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Spacer(),
+                  ShaderMask(
+                    shaderCallback: (bounds) =>
+                        AppColors.primaryGradient.createShader(bounds),
+                    child: Text(
+                      'SOFT\nCLUB',
+                      style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                            color: Colors.white,
+                            height: 1.0,
+                            fontSize: 48,
+                          ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Liquid culture & streetwear.\nModa urbana para la noche de la ciudad.',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                  const SizedBox(height: 32),
+                  GradientButton(
+                    label: 'Entrar',
+                    icon: Icons.arrow_forward_rounded,
+                    onPressed: () {
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(builder: (_) => const RootShell()),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
