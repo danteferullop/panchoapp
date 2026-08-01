@@ -1,0 +1,9 @@
+import 'package:intl/intl.dart';
+
+final NumberFormat _currencyFormat = NumberFormat.currency(
+  locale: 'es_AR',
+  symbol: '\$',
+  decimalDigits: 2,
+);
+
+String formatCurrency(num value) => _currencyFormat.format(value);
