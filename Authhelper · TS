@@ -1,0 +1,28 @@
+import { Request } from 'firebase-functions/v2/https';
+import * as admin from 'firebase-admin';
+
+/**
+ * Verifica el ID token de Firebase (sesión anónima) que la app manda en el
+ * header `Authorization: Bearer <token>`. Devuelve el uid o null si no vino
+ * token / no es válido. No lanza: quien llama decide si el uid es
+ * obligatorio para esa operación.
+ */
+export async function getVerifiedUid(req: Request): Promise<string | null> {
+  const header = req.get('Authorization') || '';
+  const match = header.match(/^Bearer (.+)$/);
+  if (!match) return null;
+
+  try {
+    const decoded = await admin.auth().verifyIdToken(match[1]);
+    return decoded.uid;
+  } catch (err) {
+    console.warn('No se pudo verificar el ID token recibido:', err);
+    return null;
+  }
+}
+
+export function applyCors(req: Request, res: { set: (k: string, v: string) => void }): void {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+}
