@@ -1,0 +1,56 @@
+export interface CartItemRequest {
+  productId: string;
+  quantity: number;
+  size?: string;
+  color?: string;
+}
+
+export interface CalculateShippingRequest {
+  items: CartItemRequest[];
+  deliveryAddress: string;
+}
+
+export interface CalculateShippingResponse {
+  distanceKm: number;
+  shippingCost: number;
+  productTotal: number;
+  totalAmount: number;
+}
+
+export interface CreatePaymentRequest {
+  items: CartItemRequest[];
+  deliveryAddress: string;
+  distanceKm: number;
+  shippingCost: number;
+  totalAmount: number;
+}
+
+export interface CreatePaymentResponse {
+  orderId: string;
+  paymentLink: string;
+}
+
+export interface OrderItemSummary {
+  productId: string;
+  name: string;
+  price: number;
+  quantity: number;
+  size: string;
+  color: string;
+}
+
+export type PaymentStatus = 'pending' | 'approved' | 'rejected';
+
+export interface OrderDocument {
+  items: OrderItemSummary[];
+  deliveryAddress: string;
+  distanceKm: number;
+  shippingCost: number;
+  productTotal: number;
+  totalAmount: number;
+  paymentStatus: PaymentStatus;
+  mercadoPagoPreferenceId: string | null;
+  mercadoPagoPaymentId: string | null;
+  userId: string | null;
+  createdAt: FirebaseFirestore.FieldValue;
+}
