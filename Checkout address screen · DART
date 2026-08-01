@@ -1,0 +1,242 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:provider/provider.dart';
+import '../config/app_config.dart';
+import '../providers/cart_provider.dart';
+import '../services/functions_service.dart';
+import '../services/geocoding_service.dart';
+import '../theme/app_theme.dart';
+import '../utils/formatters.dart';
+import '../widgets/glass_card.dart';
+import '../widgets/gradient_button.dart';
+import '../widgets/shimmer_box.dart';
+import 'payment_bridge_screen.dart';
+
+/// Coordenadas de referencia del local (Centro de Rosario), solo para
+/// centrar el mapa. El cálculo real de distancia lo hace el backend con
+/// la misma dirección de origen configurada en sus variables de entorno.
+const _storeLatLng = LatLng(-32.9442426, -60.6505318);
+
+enum _CheckoutStep { enteringAddress, calculating, quoted, error }
+
+class CheckoutAddressScreen extends StatefulWidget {
+  const CheckoutAddressScreen({super.key});
+
+  @override
+  State<CheckoutAddressScreen> createState() => _CheckoutAddressScreenState();
+}
+
+class _CheckoutAddressScreenState extends State<CheckoutAddressScreen> {
+  final _addressController = TextEditingController();
+  GoogleMapController? _mapController;
+  String? _darkMapStyle;
+
+  _CheckoutStep _step = _CheckoutStep.enteringAddress;
+  ShippingQuote? _quote;
+  String? _errorMessage;
+  LatLng? _destinationLatLng;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMapStyle();
+  }
+
+  Future<void> _loadMapStyle() async {
+    final style = await rootBundle.loadString('assets/map_style/dark_map_style.json');
+    if (mounted) setState(() => _darkMapStyle = style);
+  }
+
+  @override
+  void dispose() {
+    _addressController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _calculateShipping() async {
+    final address = _addressController.text.trim();
+    if (address.isEmpty) return;
+
+    final cart = context.read<CartProvider>();
+    setState(() {
+      _step = _CheckoutStep.calculating;
+      _errorMessage = null;
+    });
+
+    // Best-effort: ubicar un pin aproximado en el mapa (no afecta el cálculo real).
+    GeocodingService.instance.geocodeAddress(address).then((latLng) {
+      if (mounted && latLng != null) {
+        setState(() => _destinationLatLng = latLng);
+        _mapController?.animateCamera(CameraUpdate.newLatLngZoom(latLng, 12));
+      }
+    });
+
+    try {
+      final quote = await FunctionsService.instance.calculateShipping(
+        items: cart.items,
+        deliveryAddress: address,
+      );
+      if (!mounted) return;
+      setState(() {
+        _quote = quote;
+        _step = _CheckoutStep.quoted;
+      });
+    } on FunctionsServiceException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = e.message;
+        _step = _CheckoutStep.error;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = context.watch<CartProvider>();
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('CHECKOUT')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        children: [
+          Text('SHIPPING DETAILS', style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 14),
+          GlassCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: _addressController,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                  decoration: const InputDecoration(
+                    labelText: 'Dirección de entrega',
+                    hintText: 'Ej: Funes, Santa Fe, Argentina',
+                    prefixIcon: Icon(Icons.location_on_outlined, color: AppColors.accentGlossy),
+                  ),
+                  onSubmitted: (_) => _calculateShipping(),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Origen: ${AppConfig.storeOriginLabel}',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: SizedBox(
+              height: 220,
+              child: AppConfig.isMapsKeyConfigured
+                  ? GoogleMap(
+                      initialCameraPosition: const CameraPosition(target: _storeLatLng, zoom: 12),
+                      style: _darkMapStyle,
+                      onMapCreated: (controller) => _mapController = controller,
+                      markers: {
+                        Marker(
+                          markerId: const MarkerId('store'),
+                          position: _storeLatLng,
+                          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
+                        ),
+                        if (_destinationLatLng != null)
+                          Marker(
+                            markerId: const MarkerId('destination'),
+                            position: _destinationLatLng!,
+                          ),
+                      },
+                      zoomControlsEnabled: false,
+                      myLocationButtonEnabled: false,
+                    )
+                  : Container(
+                      color: AppColors.glassSurface,
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.all(20),
+                      child: Text(
+                        'Configurá GOOGLE_MAPS_CLIENT_API_KEY (--dart-define) para ver el mapa acá.\n'
+                        'El cálculo de envío funciona igual sin esto: lo hace el backend.',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          if (_step == _CheckoutStep.enteringAddress)
+            GradientButton(
+              label: 'Calcular envío',
+              icon: Icons.local_shipping_outlined,
+              onPressed: cart.isEmpty ? null : _calculateShipping,
+            ),
+          if (_step == _CheckoutStep.calculating)
+            const GlassCard(child: LoadingStatusRow(message: 'Calculando distancia…')),
+          if (_step == _CheckoutStep.error) ...[
+            GlassCard(
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline_rounded, color: Color(0xFFE85F5F)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(_errorMessage ?? 'Ocurrió un error.',
+                        style: Theme.of(context).textTheme.bodyMedium),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            GradientButton(label: 'Reintentar', onPressed: _calculateShipping),
+          ],
+          if (_step == _CheckoutStep.quoted && _quote != null) ...[
+            GlassCard(
+              borderRadius: 26,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _summaryRow(context, 'Distancia', '${_quote!.distanceKm.toStringAsFixed(1)} km'),
+                  _summaryRow(context, 'Subtotal productos', formatCurrency(_quote!.productTotal)),
+                  _summaryRow(context, 'Costo de envío', formatCurrency(_quote!.shippingCost)),
+                  const Divider(color: AppColors.glassBorder, height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('TOTAL', style: Theme.of(context).textTheme.headlineMedium),
+                      Text(
+                        formatCurrency(_quote!.totalAmount),
+                        style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 22),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            GradientButton(
+              label: 'Continuar al pago',
+              icon: Icons.arrow_forward_rounded,
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => PaymentBridgeScreen(
+                    deliveryAddress: _addressController.text.trim(),
+                    quote: _quote!,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryRow(BuildContext context, String label, String value) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: Theme.of(context).textTheme.bodyMedium),
+            Text(value, style: Theme.of(context).textTheme.bodyLarge),
+          ],
+        ),
+      );
+}
