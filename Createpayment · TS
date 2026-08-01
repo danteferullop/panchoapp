@@ -1,0 +1,137 @@
+import { onRequest } from 'firebase-functions/v2/https';
+import * as admin from 'firebase-admin';
+import { MercadoPagoConfig, Preference } from 'mercadopago';
+import { config } from './config';
+import { resolveCartItems, PricingError } from './pricing';
+import { applyCors, getVerifiedUid } from './authHelper';
+import { CreatePaymentRequest, CreatePaymentResponse, OrderDocument } from './types';
+
+/**
+ * POST /createPayment
+ *
+ * Request:  { items, deliveryAddress, distanceKm, shippingCost, totalAmount }
+ * Response: { orderId, paymentLink }
+ *
+ * Ver sección 4 (Paso 2) del documento de backend. Puntos clave de
+ * seguridad que replica esta función:
+ *  - El productTotal se recalcula desde Firestore (precio real), nunca se
+ *    confía en ningún monto que venga del cliente.
+ *  - El shippingCost se recalcula a partir de distanceKm (que en un flujo
+ *    normal ya vino de una llamada previa y legítima a /calculateShipping,
+ *    que sí golpeó la Distance Matrix API real) y la tarifa por km
+ *    configurada en el backend — nunca se usa el shippingCost que mande
+ *    el cliente tal cual.
+ *  - La orden se crea en Firestore ANTES de pedirle el link a Mercado Pago,
+ *    para poder usar el id de la orden como external_reference y así
+ *    poder relacionar el webhook con la orden correcta.
+ *
+ * Nota de alcance: por simplicidad no se vuelve a llamar a la Distance
+ * Matrix API acá (para no duplicar costo de esa llamada). Si querés blindar
+ * esto al 100% contra un distanceKm falseado, la mejora natural es guardar
+ * el resultado de /calculateShipping en una colección temporal (con TTL) y
+ * validar acá que el distanceKm recibido coincide con uno calculado
+ * recientemente para la misma dirección.
+ */
+export const createPayment = onRequest(
+  { region: 'us-central1', cors: true },
+  async (req, res) => {
+    applyCors(req, res);
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Método no permitido, usá POST.' });
+      return;
+    }
+
+    const body = req.body as CreatePaymentRequest;
+
+    if (!body?.deliveryAddress || typeof body.distanceKm !== 'number') {
+      res.status(400).json({ error: 'Faltan campos obligatorios en el body.' });
+      return;
+    }
+
+    const uid = await getVerifiedUid(req);
+
+    try {
+      const { resolvedItems, productTotal } = await resolveCartItems(body.items);
+
+      const shippingCost = Number((body.distanceKm * config.shippingRatePerKm).toFixed(2));
+      const totalAmount = Number((productTotal + shippingCost).toFixed(2));
+
+      const db = admin.firestore();
+      const orderRef = db.collection('orders').doc();
+
+      const orderDoc: OrderDocument = {
+        items: resolvedItems,
+        deliveryAddress: body.deliveryAddress,
+        distanceKm: Number(body.distanceKm.toFixed(2)),
+        shippingCost,
+        productTotal,
+        totalAmount,
+        paymentStatus: 'pending',
+        mercadoPagoPreferenceId: null,
+        mercadoPagoPaymentId: null,
+        userId: uid,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+
+      await orderRef.set(orderDoc);
+
+      const mpClient = new MercadoPagoConfig({ accessToken: config.mercadoPagoAccessToken });
+      const preferenceApi = new Preference(mpClient);
+
+      const preferenceItems = resolvedItems.map((item) => ({
+        id: item.productId,
+        title: `${item.name}${item.size ? ` (talle ${item.size})` : ''}`,
+        quantity: item.quantity,
+        unit_price: item.price,
+        currency_id: 'ARS',
+      }));
+
+      preferenceItems.push({
+        id: 'shipping',
+        title: 'Costo de envío',
+        quantity: 1,
+        unit_price: shippingCost,
+        currency_id: 'ARS',
+      });
+
+      const preferenceResult = await preferenceApi.create({
+        body: {
+          items: preferenceItems,
+          external_reference: orderRef.id,
+          back_urls: {
+            success: config.mpSuccessUrl,
+            failure: config.mpFailureUrl,
+            pending: config.mpPendingUrl,
+          },
+          auto_return: 'approved',
+          notification_url: `${config.publicFunctionsBaseUrl}/mercadoPagoWebhook`,
+        },
+      });
+
+      const paymentLink = preferenceResult.init_point || preferenceResult.sandbox_init_point;
+      if (!paymentLink) {
+        throw new Error('Mercado Pago no devolvió un init_point.');
+      }
+
+      await orderRef.update({ mercadoPagoPreferenceId: preferenceResult.id });
+
+      const response: CreatePaymentResponse = {
+        orderId: orderRef.id,
+        paymentLink,
+      };
+
+      res.status(200).json(response);
+    } catch (err) {
+      if (err instanceof PricingError) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
+      console.error('Error inesperado en createPayment:', err);
+      res.status(500).json({ error: 'Error interno al generar el pago.' });
+    }
+  },
+);
