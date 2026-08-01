@@ -1,0 +1,43 @@
+/**
+ * Script de carga de productos de ejemplo.
+ *
+ * Uso:
+ *   1) Generá una clave de cuenta de servicio en Firebase Console:
+ *      Configuración del proyecto > Cuentas de servicio > Generar nueva clave privada.
+ *      Guardá el JSON descargado como `serviceAccountKey.json` en esta misma carpeta
+ *      (NO lo subas a git — ya está contemplado en .gitignore del backend).
+ *   2) Instalá la dependencia:
+ *      npm install firebase-admin
+ *   3) Corré:
+ *      node seed.js
+ */
+
+const admin = require('firebase-admin');
+const products = require('./products_seed.json');
+
+const serviceAccount = require('./serviceAccountKey.json');
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
+const db = admin.firestore();
+
+async function run() {
+  const batch = db.batch();
+  const collection = db.collection('products');
+
+  products.forEach((product) => {
+    const docRef = collection.doc();
+    batch.set(docRef, product);
+  });
+
+  await batch.commit();
+  console.log(`✅ Se cargaron ${products.length} productos en la colección "products".`);
+  process.exit(0);
+}
+
+run().catch((err) => {
+  console.error('❌ Error cargando productos:', err);
+  process.exit(1);
+});
