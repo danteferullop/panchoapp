@@ -1,0 +1,170 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../models/product.dart';
+import '../providers/cart_provider.dart';
+import '../theme/app_theme.dart';
+import '../utils/formatters.dart';
+import '../widgets/gradient_button.dart';
+import 'cart_screen.dart';
+
+class ProductDetailScreen extends StatefulWidget {
+  final Product product;
+  const ProductDetailScreen({super.key, required this.product});
+
+  @override
+  State<ProductDetailScreen> createState() => _ProductDetailScreenState();
+}
+
+class _ProductDetailScreenState extends State<ProductDetailScreen> {
+  String? _selectedSize;
+  String? _selectedColor;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedSize = widget.product.sizes.isNotEmpty ? widget.product.sizes.first : null;
+    _selectedColor = widget.product.colors.isNotEmpty ? widget.product.colors.first : null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final product = widget.product;
+
+    return Scaffold(
+      body: Stack(
+        children: [
+          CustomScrollView(
+            slivers: [
+              SliverAppBar(
+                pinned: true,
+                expandedHeight: 380,
+                backgroundColor: AppColors.bgPrimary,
+                leading: const BackButton(color: AppColors.accentGlossy),
+                flexibleSpace: FlexibleSpaceBar(
+                  background: product.thumbnail.isNotEmpty
+                      ? Image.network(product.thumbnail, fit: BoxFit.cover)
+                      : Container(color: AppColors.gradientStart.withOpacity(0.3)),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 140),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        product.category.toUpperCase(),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(letterSpacing: 1),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(product.name, style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 26)),
+                      const SizedBox(height: 14),
+                      ShaderMask(
+                        shaderCallback: (b) => AppColors.primaryGradient.createShader(b),
+                        child: Text(
+                          formatCurrency(product.price),
+                          style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                                fontSize: 22,
+                                color: Colors.white,
+                              ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      if (product.description.isNotEmpty)
+                        Text(product.description, style: Theme.of(context).textTheme.bodyLarge),
+                      const SizedBox(height: 26),
+                      if (product.sizes.isNotEmpty) ...[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('SELECT SIZE', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontSize: 14)),
+                            Text('Size guide', style: Theme.of(context).textTheme.bodyMedium),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 10,
+                          children: product.sizes.map((size) {
+                            final selected = size == _selectedSize;
+                            return GestureDetector(
+                              onTap: () => setState(() => _selectedSize = size),
+                              child: Container(
+                                width: 46,
+                                height: 46,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: selected ? AppColors.primaryGradient : null,
+                                  color: selected ? null : AppColors.glassSurface,
+                                  border: Border.all(
+                                    color: selected ? AppColors.accentGlossy : AppColors.glassBorder,
+                                  ),
+                                  boxShadow: selected
+                                      ? [
+                                          BoxShadow(
+                                            color: AppColors.gradientEnd.withOpacity(0.5),
+                                            blurRadius: 12,
+                                          ),
+                                        ]
+                                      : null,
+                                ),
+                                child: Text(size, style: Theme.of(context).textTheme.labelLarge),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+                      if (product.colors.isNotEmpty) ...[
+                        Text('COLOR', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontSize: 14)),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 10,
+                          children: product.colors.map((color) {
+                            final selected = color == _selectedColor;
+                            return ChoiceChip(
+                              label: Text(color),
+                              selected: selected,
+                              onSelected: (_) => setState(() => _selectedColor = color),
+                              backgroundColor: AppColors.glassSurface,
+                              selectedColor: AppColors.gradientEnd.withOpacity(0.4),
+                              labelStyle: Theme.of(context).textTheme.bodyMedium,
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 24,
+            child: SafeArea(
+              top: false,
+              child: GradientButton(
+                label: 'Añadir al carrito',
+                icon: Icons.add_shopping_cart_rounded,
+                onPressed: product.stock <= 0
+                    ? null
+                    : () {
+                        context.read<CartProvider>().addProduct(
+                              product,
+                              size: _selectedSize ?? '-',
+                              color: _selectedColor ?? '-',
+                            );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('${product.name} agregado al carrito')),
+                        );
+                      },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
