@@ -1,0 +1,149 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/cart_provider.dart';
+import '../theme/app_theme.dart';
+import '../utils/formatters.dart';
+import '../widgets/glass_card.dart';
+import '../widgets/gradient_button.dart';
+import 'checkout_address_screen.dart';
+
+class CartScreen extends StatelessWidget {
+  const CartScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = context.watch<CartProvider>();
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('CARRITO')),
+      body: cart.isEmpty
+          ? _EmptyCart()
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              children: [
+                ...cart.items.map((item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: GlassCard(
+                        child: Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: item.product.thumbnail.isNotEmpty
+                                  ? Image.network(
+                                      item.product.thumbnail,
+                                      width: 64,
+                                      height: 64,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => _thumbFallback(),
+                                    )
+                                  : _thumbFallback(),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(item.product.name,
+                                      style: Theme.of(context).textTheme.titleMedium),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Talle ${item.selectedSize} · ${item.selectedColor}',
+                                    style: Theme.of(context).textTheme.bodyMedium,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    formatCurrency(item.subtotal),
+                                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                          color: AppColors.accentGlossy,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Column(
+                              children: [
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(Icons.add_circle_outline, color: AppColors.accentGlossy),
+                                  onPressed: () => context
+                                      .read<CartProvider>()
+                                      .updateQuantity(item.variantKey, item.quantity + 1),
+                                ),
+                                Text('${item.quantity}', style: Theme.of(context).textTheme.bodyLarge),
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(Icons.remove_circle_outline, color: AppColors.accentGlossy),
+                                  onPressed: () => context
+                                      .read<CartProvider>()
+                                      .updateQuantity(item.variantKey, item.quantity - 1),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    )),
+                const SizedBox(height: 12),
+                GlassCard(
+                  borderRadius: 26,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Subtotal', style: Theme.of(context).textTheme.bodyLarge),
+                          Text(formatCurrency(cart.productTotal), style: Theme.of(context).textTheme.bodyLarge),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'El envío se calcula en el siguiente paso según tu dirección.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 18),
+                      GradientButton(
+                        label: 'Continuar con la compra',
+                        icon: Icons.arrow_forward_rounded,
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const CheckoutAddressScreen()),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _thumbFallback() => Container(
+        width: 64,
+        height: 64,
+        color: AppColors.gradientStart.withOpacity(0.4),
+        child: const Icon(Icons.image_not_supported_outlined, color: AppColors.accentGlossy),
+      );
+}
+
+class _EmptyCart extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.shopping_bag_outlined, size: 48, color: AppColors.accentGlossy),
+            const SizedBox(height: 16),
+            Text(
+              'Tu carrito está vacío.\nExplorá el catálogo y elegí tu próxima pieza.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
