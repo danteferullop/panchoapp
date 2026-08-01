@@ -1,0 +1,40 @@
+import 'dart:ui';
+import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
+
+/// Tarjeta con efecto de vidrio esmerilado oscuro, tal como se describe en
+/// la sección 2.4 del documento visual: fondo azul translúcido + blur +
+/// borde cian sutil.
+class GlassCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double borderRadius;
+  final double blurSigma;
+
+  const GlassCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+    this.borderRadius = 22,
+    this.blurSigma = 12,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            color: AppColors.glassSurface,
+            borderRadius: BorderRadius.circular(borderRadius),
+            border: Border.all(color: AppColors.glassBorder, width: 1),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
