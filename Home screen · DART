@@ -1,0 +1,214 @@
+import 'package:flutter/material.dart';
+import '../models/product.dart';
+import '../services/firestore_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/glass_card.dart';
+import '../widgets/product_card.dart';
+import '../widgets/shimmer_box.dart';
+import '../widgets/soft_club_app_bar.dart';
+import 'cart_screen.dart';
+import 'product_detail_screen.dart';
+
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: SoftClubAppBar(
+        onCartTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const CartScreen()),
+        ),
+      ),
+      body: StreamBuilder<List<Product>>(
+        stream: FirestoreService.instance.streamProducts(),
+        builder: (context, snapshot) {
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 140),
+            children: [
+              _HeroBanner(),
+              const SizedBox(height: 24),
+              _QuickCategories(),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Text('LATEST ', style: Theme.of(context).textTheme.headlineMedium),
+                  Text(
+                    'artefacts',
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          fontStyle: FontStyle.italic,
+                          color: AppColors.textPrimary,
+                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _ProductsGrid(snapshot: snapshot),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _HeroBanner extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      borderRadius: 28,
+      padding: const EdgeInsets.all(0),
+      child: Container(
+        height: 220,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              AppColors.gradientStart.withOpacity(0.5),
+              AppColors.bgPrimary,
+            ],
+          ),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('NEW', style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 30)),
+            ShaderMask(
+              shaderCallback: (b) => AppColors.primaryGradient.createShader(b),
+              child: Text(
+                'DROP',
+                style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                      fontSize: 30,
+                      color: Colors.white,
+                    ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Liquid culture meets algorithmic precision.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickCategories extends StatelessWidget {
+  final categories = const ['Todo', 'Outerwear', 'Footwear', 'Accesorios'];
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: categories.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, i) {
+          final active = i == 0;
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.glassSurface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: active ? AppColors.accentGlossy : AppColors.glassBorder,
+                width: active ? 1.4 : 1,
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Text(categories[i], style: Theme.of(context).textTheme.bodyMedium),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ProductsGrid extends StatelessWidget {
+  final AsyncSnapshot<List<Product>> snapshot;
+  const _ProductsGrid({required this.snapshot});
+
+  @override
+  Widget build(BuildContext context) {
+    if (snapshot.hasError) {
+      return _InfoMessage(
+        icon: Icons.cloud_off_rounded,
+        message:
+            'No se pudo leer la colección "products" de Firestore.\nRevisá la configuración de Firebase (firebase_options.dart).',
+      );
+    }
+
+    if (!snapshot.hasData) {
+      return GridView.count(
+        crossAxisCount: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 14,
+        crossAxisSpacing: 14,
+        childAspectRatio: 0.68,
+        children: List.generate(4, (_) => const ShimmerBox(height: double.infinity)),
+      );
+    }
+
+    final products = snapshot.data!;
+    if (products.isEmpty) {
+      return _InfoMessage(
+        icon: Icons.inventory_2_outlined,
+        message:
+            'Todavía no hay productos cargados en Firestore.\nCorré el script de seed (ver /seed) o agregalos desde la consola.',
+      );
+    }
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: products.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 14,
+        crossAxisSpacing: 14,
+        childAspectRatio: 0.68,
+      ),
+      itemBuilder: (context, i) {
+        final product = products[i];
+        return ProductCard(
+          product: product,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => ProductDetailScreen(product: product)),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _InfoMessage extends StatelessWidget {
+  final IconData icon;
+  final String message;
+  const _InfoMessage({required this.icon, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: Column(
+        children: [
+          Icon(icon, size: 40, color: AppColors.accentGlossy.withOpacity(0.6)),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ],
+      ),
+    );
+  }
+}
