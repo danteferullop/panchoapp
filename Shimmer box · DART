@@ -1,0 +1,61 @@
+import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
+import '../theme/app_theme.dart';
+
+/// Skeleton shimmer en tono cian sobre fondo oscuro (sección 3.6 / tabla de
+/// componentes UI), usado mientras se espera la respuesta de una API
+/// externa (cálculo de distancia, generación de link de pago).
+class ShimmerBox extends StatelessWidget {
+  final double height;
+  final double? width;
+  final double borderRadius;
+
+  const ShimmerBox({
+    super.key,
+    this.height = 16,
+    this.width,
+    this.borderRadius = 8,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer.fromColors(
+      baseColor: AppColors.glassSurface,
+      highlightColor: AppColors.accentGlossy.withOpacity(0.25),
+      period: const Duration(milliseconds: 1400),
+      child: Container(
+        height: height,
+        width: width,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(borderRadius),
+        ),
+      ),
+    );
+  }
+}
+
+/// Fila con mensaje contextual + shimmer, para estados como
+/// "Calculando distancia…" o "Generando link de pago…".
+class LoadingStatusRow extends StatelessWidget {
+  final String message;
+
+  const LoadingStatusRow({super.key, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const SizedBox(
+          height: 18,
+          width: 18,
+          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accentGlossy),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(message, style: Theme.of(context).textTheme.bodyMedium),
+        ),
+      ],
+    );
+  }
+}
