@@ -1,0 +1,53 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/cart_provider.dart';
+import '../theme/app_theme.dart';
+import 'glass_card.dart';
+
+class SoftClubAppBar extends StatelessWidget implements PreferredSizeWidget {
+  final VoidCallback onCartTap;
+
+  const SoftClubAppBar({super.key, required this.onCartTap});
+
+  @override
+  Size get preferredSize => const Size.fromHeight(64);
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = context.watch<CartProvider>();
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+        child: GlassCard(
+          borderRadius: 20,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              ShaderMask(
+                shaderCallback: (bounds) => AppColors.primaryGradient.createShader(bounds),
+                child: Text(
+                  'SOFT CLUB',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: Colors.white,
+                        letterSpacing: 1.2,
+                      ),
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: onCartTap,
+                icon: Badge(
+                  isLabelVisible: cart.itemCount > 0,
+                  label: Text('${cart.itemCount}'),
+                  backgroundColor: AppColors.gradientEnd,
+                  child: const Icon(Icons.shopping_bag_outlined),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
