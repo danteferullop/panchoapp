@@ -1,0 +1,64 @@
+import { onRequest } from 'firebase-functions/v2/https';
+import { config } from './config';
+import { getDistanceKm, DistanceMatrixError } from './googleMaps';
+import { resolveCartItems, PricingError } from './pricing';
+import { applyCors } from './authHelper';
+import { CalculateShippingRequest, CalculateShippingResponse } from './types';
+
+/**
+ * POST /calculateShipping
+ *
+ * Request:  { items: [{productId, quantity, size?, color?}], deliveryAddress }
+ * Response: { distanceKm, shippingCost, productTotal, totalAmount }
+ *
+ * Ver sección 4 (Paso 1) del documento de backend para el detalle completo
+ * del contrato y la fórmula de negocio.
+ */
+export const calculateShipping = onRequest(
+  { region: 'us-central1', cors: true },
+  async (req, res) => {
+    applyCors(req, res);
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Método no permitido, usá POST.' });
+      return;
+    }
+
+    const body = req.body as CalculateShippingRequest;
+
+    if (!body?.deliveryAddress || typeof body.deliveryAddress !== 'string') {
+      res.status(400).json({ error: 'Falta "deliveryAddress" en el body.' });
+      return;
+    }
+
+    try {
+      const { productTotal } = await resolveCartItems(body.items);
+      const distanceKm = await getDistanceKm(body.deliveryAddress);
+      const shippingCost = Number((distanceKm * config.shippingRatePerKm).toFixed(2));
+      const totalAmount = Number((productTotal + shippingCost).toFixed(2));
+
+      const response: CalculateShippingResponse = {
+        distanceKm: Number(distanceKm.toFixed(2)),
+        shippingCost,
+        productTotal,
+        totalAmount,
+      };
+
+      res.status(200).json(response);
+    } catch (err) {
+      if (err instanceof DistanceMatrixError) {
+        res.status(400).json({ error: `Dirección no encontrada: ${err.message}` });
+        return;
+      }
+      if (err instanceof PricingError) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
+      console.error('Error inesperado en calculateShipping:', err);
+      res.status(500).json({ error: 'Error interno al calcular el envío.' });
+    }
+  },
+);
