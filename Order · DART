@@ -1,0 +1,97 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+/// Estados posibles de pago de una orden (coincide con lo que el backend
+/// escribe en Firestore luego de confirmar con Mercado Pago).
+enum PaymentStatus { pending, approved, rejected, unknown }
+
+PaymentStatus paymentStatusFromString(String? value) {
+  switch (value) {
+    case 'approved':
+      return PaymentStatus.approved;
+    case 'rejected':
+      return PaymentStatus.rejected;
+    case 'pending':
+      return PaymentStatus.pending;
+    default:
+      return PaymentStatus.unknown;
+  }
+}
+
+class OrderItemSummary {
+  final String productId;
+  final String name;
+  final double price;
+  final int quantity;
+  final String size;
+  final String color;
+
+  const OrderItemSummary({
+    required this.productId,
+    required this.name,
+    required this.price,
+    required this.quantity,
+    required this.size,
+    required this.color,
+  });
+
+  factory OrderItemSummary.fromMap(Map<String, dynamic> map) => OrderItemSummary(
+        productId: map['productId'] ?? '',
+        name: map['name'] ?? '',
+        price: (map['price'] as num?)?.toDouble() ?? 0,
+        quantity: (map['quantity'] as num?)?.toInt() ?? 1,
+        size: map['size'] ?? '',
+        color: map['color'] ?? '',
+      );
+}
+
+/// Representa un documento de la colección `orders` en Firestore.
+///
+/// Nota: la consigna original describe una orden con un único `productId`.
+/// Como la interfaz visual incluye un carrito con múltiples productos, este
+/// modelo extiende esa idea a una lista `items`, manteniendo el mismo
+/// espíritu (separar distancia, envío y total del producto para poder
+/// auditar el cálculo).
+class Order {
+  final String id;
+  final List<OrderItemSummary> items;
+  final String deliveryAddress;
+  final double distanceKm;
+  final double shippingCost;
+  final double productTotal;
+  final double totalAmount;
+  final PaymentStatus paymentStatus;
+  final String? mercadoPagoPreferenceId;
+  final DateTime? createdAt;
+
+  const Order({
+    required this.id,
+    required this.items,
+    required this.deliveryAddress,
+    required this.distanceKm,
+    required this.shippingCost,
+    required this.productTotal,
+    required this.totalAmount,
+    required this.paymentStatus,
+    this.mercadoPagoPreferenceId,
+    this.createdAt,
+  });
+
+  factory Order.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? {};
+    final rawItems = (data['items'] as List?) ?? const [];
+    return Order(
+      id: doc.id,
+      items: rawItems
+          .map((e) => OrderItemSummary.fromMap(Map<String, dynamic>.from(e)))
+          .toList(),
+      deliveryAddress: data['deliveryAddress'] ?? '',
+      distanceKm: (data['distanceKm'] as num?)?.toDouble() ?? 0,
+      shippingCost: (data['shippingCost'] as num?)?.toDouble() ?? 0,
+      productTotal: (data['productTotal'] as num?)?.toDouble() ?? 0,
+      totalAmount: (data['totalAmount'] as num?)?.toDouble() ?? 0,
+      paymentStatus: paymentStatusFromString(data['paymentStatus']),
+      mercadoPagoPreferenceId: data['mercadoPagoPreferenceId'],
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+    );
+  }
+}
