@@ -1,0 +1,62 @@
+[
+  {
+    "name": "Cyber Shell Jacket",
+    "price": 42000,
+    "sizes": ["S", "M", "L", "XL"],
+    "colors": ["Chrome", "Black"],
+    "images": ["https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800"],
+    "stock": 12,
+    "category": "Outerwear",
+    "description": "Ingeniería para la expansión nocturna. Tejido hidro-repelente con lining térmico especular. Las articulaciones ofrecen movilidad fluida en entornos de alta densidad."
+  },
+  {
+    "name": "Liquid Chrome Hoodie",
+    "price": 14500,
+    "sizes": ["S", "M", "L"],
+    "colors": ["Blue", "Black"],
+    "images": ["https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=800"],
+    "stock": 20,
+    "category": "Outerwear",
+    "description": "Buzo oversized con terminación glossy y capucha reforzada, pensado para el club y la calle por igual."
+  },
+  {
+    "name": "Phase IV Runners",
+    "price": 22000,
+    "sizes": ["38", "39", "40", "41", "42", "43"],
+    "colors": ["Silver"],
+    "images": ["https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800"],
+    "stock": 15,
+    "category": "Footwear",
+    "description": "Zapatillas de perfil bajo con suela translúcida y detalles reflectantes cian."
+  },
+  {
+    "name": "Tactical Wet Pants",
+    "price": 21000,
+    "sizes": ["S", "M", "L", "XL"],
+    "colors": ["Navy"],
+    "images": ["https://images.unsplash.com/photo-1584865288642-42078afe6942?w=800"],
+    "stock": 18,
+    "category": "Outerwear",
+    "description": "Pantalón cargo técnico con múltiples bolsillos y cierre de cintura ajustable."
+  },
+  {
+    "name": "Nocturnal Vest",
+    "price": 31000,
+    "sizes": ["M", "L"],
+    "colors": ["Black"],
+    "images": ["https://images.unsplash.com/photo-1520975954732-35dd22299614?w=800"],
+    "stock": 8,
+    "category": "Accesorios",
+    "description": "Chaleco táctico multi-bolsillo, pieza central de cualquier fit nocturno."
+  },
+  {
+    "name": "Liquid Chrome Chain",
+    "price": 14500,
+    "sizes": ["Único"],
+    "colors": ["Silver"],
+    "images": ["https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=800"],
+    "stock": 25,
+    "category": "Accesorios",
+    "description": "Cadena gruesa de acabado cromado, el accesorio infaltable de la colección."
+  }
+]
