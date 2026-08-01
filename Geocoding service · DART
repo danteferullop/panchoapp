@@ -1,0 +1,42 @@
+import 'dart:convert';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:http/http.dart' as http;
+import '../config/app_config.dart';
+
+/// Convierte una dirección de texto en coordenadas para mostrar un pin
+/// aproximado en el mapa del checkout.
+///
+/// Importante: esto es solo un detalle visual. El costo de envío real se
+/// calcula en el backend con Google Distance Matrix API (server-side), así
+/// que si esta llamada falla (por ejemplo, no configuraste
+/// GOOGLE_MAPS_CLIENT_API_KEY todavía) la app simplemente no muestra el pin
+/// de destino, pero el checkout sigue funcionando igual.
+class GeocodingService {
+  GeocodingService._internal();
+  static final GeocodingService instance = GeocodingService._internal();
+
+  Future<LatLng?> geocodeAddress(String address) async {
+    if (!AppConfig.isMapsKeyConfigured || address.trim().isEmpty) return null;
+
+    final uri = Uri.https('maps.googleapis.com', '/maps/api/geocode/json', {
+      'address': address,
+      'key': AppConfig.googleMapsClientApiKey,
+    });
+
+    try {
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (response.statusCode != 200) return null;
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      if (json['status'] != 'OK') return null;
+      final results = json['results'] as List;
+      if (results.isEmpty) return null;
+      final location = results.first['geometry']['location'];
+      return LatLng(
+        (location['lat'] as num).toDouble(),
+        (location['lng'] as num).toDouble(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
