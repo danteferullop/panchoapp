@@ -1,0 +1,48 @@
+import { config } from './config';
+
+export class DistanceMatrixError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DistanceMatrixError';
+  }
+}
+
+/**
+ * Consulta la Google Maps Distance Matrix API y devuelve la distancia en
+ * kilómetros entre el local (origin) y la dirección del cliente
+ * (destination). Se llama SIEMPRE desde el backend: la API Key nunca viaja
+ * al cliente.
+ */
+export async function getDistanceKm(destinationAddress: string): Promise<number> {
+  const origin = config.storeOriginAddress;
+  const url = new URL('https://maps.googleapis.com/maps/api/distancematrix/json');
+  url.searchParams.set('origins', origin);
+  url.searchParams.set('destinations', destinationAddress);
+  url.searchParams.set('units', 'metric');
+  url.searchParams.set('key', config.googleMapsApiKey);
+
+  const response = await fetch(url.toString());
+  if (!response.ok) {
+    throw new DistanceMatrixError(
+      `Google Maps respondió con status HTTP ${response.status}.`,
+    );
+  }
+
+  const json = (await response.json()) as any;
+
+  if (json.status !== 'OK') {
+    throw new DistanceMatrixError(
+      `Google Maps Distance Matrix devolvió status "${json.status}".`,
+    );
+  }
+
+  const element = json.rows?.[0]?.elements?.[0];
+  if (!element || element.status !== 'OK') {
+    throw new DistanceMatrixError(
+      'No se pudo calcular la distancia para esa dirección (¿dirección inválida?).',
+    );
+  }
+
+  const meters = element.distance.value as number;
+  return meters / 1000;
+}
