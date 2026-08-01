@@ -1,0 +1,76 @@
+import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
+
+import 'firebase_options.dart';
+import 'providers/cart_provider.dart';
+import 'services/auth_service.dart';
+import 'theme/app_theme.dart';
+import 'screens/onboarding_screen.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  runApp(const SoftClubApp());
+}
+
+class SoftClubApp extends StatelessWidget {
+  const SoftClubApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => CartProvider()),
+      ],
+      child: MaterialApp(
+        title: 'Soft Club',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.darkTheme,
+        home: const _AppBootstrap(),
+      ),
+    );
+  }
+}
+
+/// Antes de mostrar cualquier pantalla, garantizamos una sesión anónima:
+/// la necesitamos para que las reglas de seguridad de Firestore puedan
+/// filtrar "solo mis órdenes" y para que el backend pueda verificar el
+/// token en cada llamada a Cloud Functions.
+class _AppBootstrap extends StatelessWidget {
+  const _AppBootstrap();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder(
+      future: AuthService.instance.ensureSignedIn(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(color: AppColors.accentGlossy),
+            ),
+          );
+        }
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'No se pudo inicializar Firebase Auth.\n'
+                  'Revisá que hayas corrido `flutterfire configure` y que la '
+                  'autenticación anónima esté habilitada en la consola de Firebase.\n\n'
+                  '${snapshot.error}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.textPrimary),
+                ),
+              ),
+            ),
+          );
+        }
+        return const OnboardingScreen();
+      },
+    );
+  }
+}
