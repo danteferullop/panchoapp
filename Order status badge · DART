@@ -1,0 +1,47 @@
+import 'package:flutter/material.dart';
+import '../models/order.dart';
+import '../theme/app_theme.dart';
+
+class OrderStatusBadge extends StatelessWidget {
+  final PaymentStatus status;
+  const OrderStatusBadge({super.key, required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final (color, label) = switch (status) {
+      PaymentStatus.approved => (const Color(0xFF3FE8A0), 'PAGADO'),
+      PaymentStatus.rejected => (const Color(0xFFE85F5F), 'RECHAZADO'),
+      PaymentStatus.pending => (AppColors.accentGlossy, 'PENDIENTE'),
+      PaymentStatus.unknown => (Colors.grey, 'DESCONOCIDO'),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.6)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
