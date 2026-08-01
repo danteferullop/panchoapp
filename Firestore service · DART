@@ -1,0 +1,49 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/product.dart';
+import '../models/order.dart';
+
+/// La app SOLO lee de Firestore (productos, y sus propias órdenes).
+/// La escritura de órdenes es exclusiva del backend (Cloud Functions con
+/// Admin SDK), tal como está descripto en la sección de seguridad del
+/// documento de backend.
+class FirestoreService {
+  FirestoreService._internal();
+  static final FirestoreService instance = FirestoreService._internal();
+
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  Stream<List<Product>> streamProducts() {
+    return _db
+        .collection('products')
+        .snapshots()
+        .map((snap) => snap.docs.map(Product.fromFirestore).toList());
+  }
+
+  Future<Product?> getProduct(String productId) async {
+    final doc = await _db.collection('products').doc(productId).get();
+    if (!doc.exists) return null;
+    return Product.fromFirestore(doc);
+  }
+
+  /// Escucha en tiempo real el documento de una orden puntual. Es lo que
+  /// permite que la pantalla "puente" detecte apenas el webhook de Mercado
+  /// Pago actualiza paymentStatus a "approved", sin que el usuario tenga
+  /// que refrescar nada manualmente.
+  Stream<Order> streamOrder(String orderId) {
+    return _db
+        .collection('orders')
+        .doc(orderId)
+        .snapshots()
+        .where((doc) => doc.exists)
+        .map(Order.fromFirestore);
+  }
+
+  Stream<List<Order>> streamUserOrders(String userId) {
+    return _db
+        .collection('orders')
+        .where('userId', isEqualTo: userId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map(Order.fromFirestore).toList());
+  }
+}
